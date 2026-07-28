@@ -417,8 +417,10 @@ double GReWeightXSecMEC::CalcWeightAngularDist(const genie::EventRecord& event)
   // Only tweak dial values on the interval [0, 1] make sense for the angular
   // distribution. Enforce this here regardless of what the user requested.
   //double twk_dial = std::max( std::min(1., fDecayAngTwkDial), 0. );
-  // Changed it to [-1, 1] as there are now two tweak dial values. - L. Bathe-Peters
-  double twk_dial = std::max( std::min(1., fDecayAngTwkDial), -1. );
+  // Changed it to [-0.5, 1] for more variability. The interval value is chosen
+  // such that the resulting weight is non-negative. The second tweak dial changes
+  // the frequency (not the normalisation). - L. Bathe-Peters
+  double twk_dial = std::max( std::min(1., fDecayAngTwkDial), -0.5 );
   double twk_dial2 = fDecayAng2TwkDial;
 
   if( twk_dial2 == 0 ) twk_dial2 = 1.0;
