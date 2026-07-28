@@ -91,6 +91,7 @@
 #include "Framework/Utils/CmdLnArgParser.h"
 #include "Framework/Numerical/MathUtils.h"
 #include "Framework/Utils/StringUtils.h"
+#include "Framework/Utils/XSecSplineList.h"
 
 // GENIE/Reweight includes
 #include "RwFramework/GSystSet.h"
@@ -561,6 +562,20 @@ void GetCommandLineArgs(int argc, char ** argv)
       << "Run key set to " <<gOptRunKey;
   }
 
+  // Get the splines file(s) — supports comma-separated list for loading
+  // splines from multiple tunes (e.g. SuSAv2, Valencia, Martini)
+  if ( parser.OptionExists("cross-sections") ) {
+    LOG("grwghtnp", pINFO) << "Loading cross-section splines";
+    std::string spl_file_names = parser.ArgAsString( "cross-sections" );
+    genie::XSecSplineList* xssl = genie::XSecSplineList::Instance();
+    std::vector<std::string> files = utils::str::Split(spl_file_names, ",");
+    for (size_t i = 0; i < files.size(); ++i) {
+      std::string trimmed = utils::str::TrimSpaces(files[i]);
+      LOG("grwghtnp", pINFO) << "Loading spline file: " << trimmed;
+      xssl->LoadFromXml( trimmed, /*keep=*/ i > 0 );
+    }
+  }
+
 }
 //_________________________________________________________________________________
 void GetEventRange(Long64_t nev_in_file, Long64_t & nfirst, Long64_t & nlast)
@@ -949,6 +964,7 @@ void PrintSyntax(void)
      << "     -v cval1[,cval2[,...]]  \n"
      << "    [-n n1[,n2]]             \n"
      << "    [-r run_key]             \n"
-     << "    [-o output_weights_file]";
+     << "    [-o output_weights_file] \n"
+     << "    [--cross-sections spl1.xml[,spl2.xml[,...]]]";
 }
 //_________________________________________________________________________________

@@ -279,23 +279,14 @@ double GReWeightXSecMEC::CalcWeight(const genie::EventRecord& event)
   if ( !is_mec ) return 1.;
 
     current_event++;
-    std::cout << "Event: " << current_event << "                                             <-- New event" << std::endl;
   double weight = this->CalcWeightNorm( event );
-    std::cout << "Weight norm:                " << weight << std::endl;
   weight *= this->CalcWeightAngularDist( event );
-    std::cout << "Weight ang:                 " << weight << std::endl;
   weight *= this->CalcWeightAngularDistLegendre( event );
-    std::cout << "Weight ang Legendre:        " << weight << std::endl;
   weight *= this->CalcWeightPNDelta( event );
-    std::cout << "Weight pndel: " << weight << std::endl;
   weight *= this->CalcWeightXSecShape( event );
-    std::cout << "Weight xsecshape:           " << weight << std::endl;
   weight *= this->CalcWeightXSecShape_Empirical( event );
-    std::cout << "Weight xsecshape_empirical: " << weight << std::endl;
   weight *= this->CalcWeightXSecShape_Martini( event );
-    std::cout << "Weight xsecshape_martini:   " << weight << std::endl;
   weight *= this->CalcWeightEnergyDependence( event );
-    std::cout << "Weight edep:                " << weight << std::endl;
   return weight;
 }
 //_______________________________________________________________________________________
@@ -429,7 +420,6 @@ double GReWeightXSecMEC::CalcWeightAngularDist(const genie::EventRecord& event)
 
   if( twk_dial2 == 0 ) twk_dial2 = 1.0;
 
-  std::cout << "twk_dial = " << twk_dial << ";    twk_dial2 = " << twk_dial2 << std::endl << std::endl;
 
   // If the tweak dials are set to zero (or are really small) then just return a
   // weight of unity
@@ -664,7 +654,6 @@ double GReWeightXSecMEC::CalcWeightAngularDistLegendre(const genie::EventRecord&
   // the angle is divided by \Pi/2 and subtracted by 1 such that the argument of P_l(x) is
   // within [-1,1]. The factor 3 is to enhance the effect of the reweighting as P_l(x) < 1.
 
-  std::cout << "Legendre polynomial P_l( " << 1 << " , " << std::cos(theta_N1) << ") = " << gsl_sf_legendre_Pl(1, std::cos(theta_N1)) << std::endl;
 
   // The values (twk_dial, twk_dial2, ..., twk_dial6) define one systematic
   // throw. The amplitude k that scales them is computed once per throw
@@ -1040,33 +1029,27 @@ double GReWeightXSecMEC::CalcWeightXSecShape(const genie::EventRecord& event)
     // input tune, compute the differential and total cross section of GENIE's 
     // Valencia MEC (alternative) model.
 
-    std::cout << "Input (default) CCMEC cross section model name: " << cc_def_alg_name << std::endl;
-    std::cout << "Alternative CCMEC cross section model name:     " << cc_alt_alg_name << std::endl;
 
     diff_xsec_alt = fXSecAlgCCAlt_Nieves->XSec( interaction, kPSTlctl );
-    tot_xsec_alt = this->GetXSecIntegral( fXSecAlgCCAlt_Nieves, interaction );
+    tot_xsec_alt = this->GetXSecFromSplineOrIntegral( fXSecAlgCCAlt_Nieves, interaction );
   }
   else if ( cc_def_alg_name == "genie::NievesSimoVacasMECPXSec2016" ) {
-    // If the Valencia model is the default CCMEC cross section model from the 
-    // input tune, compute the differential and total cross section of GENIE's 
+    // If the Valencia model is the default CCMEC cross section model from the
+    // input tune, compute the differential and total cross section of GENIE's
     // SuSAv2 MEC (alternative) model.
 
-    std::cout << "Input (default) CCMEC cross section model: " << cc_def_alg_name << std::endl;
-    std::cout << "Alternative CCMEC cross section model: " << cc_alt2_alg_name << std::endl; 
 
-    diff_xsec_alt = fXSecAlgCCAlt_SuSAv2->XSec( interaction, kPSTlctl ); 
-    tot_xsec_alt = this->GetXSecIntegral( fXSecAlgCCAlt_SuSAv2, interaction ); 
+    diff_xsec_alt = fXSecAlgCCAlt_SuSAv2->XSec( interaction, kPSTlctl );
+    tot_xsec_alt = this->GetXSecFromSplineOrIntegral( fXSecAlgCCAlt_SuSAv2, interaction );
   }
   else if ( cc_def_alg_name == "genie::MartiniEricsonChanfrayMarteauMECPXSec2024" ) {
-    // If the Martini-Ericson-Chanfray-Marteau model is the default CCMEC cross section 
+    // If the Martini-Ericson-Chanfray-Marteau model is the default CCMEC cross section
     // model from the input tune, compute the differential and total cross section of GENIE's
     // SuSAv2 MEC (alternative) model.
 
-    std::cout << "Input (default) CCMEC cross section model: " << cc_def_alg_name << std::endl;
-    std::cout << "Alternative CCMEC cross section model: " << cc_alt2_alg_name << std::endl;
 
-    diff_xsec_alt = fXSecAlgCCAlt_SuSAv2->XSec( interaction, kPSTlctl ); 
-    tot_xsec_alt = this->GetXSecIntegral( fXSecAlgCCAlt_SuSAv2, interaction );
+    diff_xsec_alt = fXSecAlgCCAlt_SuSAv2->XSec( interaction, kPSTlctl );
+    tot_xsec_alt = this->GetXSecFromSplineOrIntegral( fXSecAlgCCAlt_SuSAv2, interaction );
   }
   else {
     // If the Empirical or any other model is the default CCMEC cross section model 
@@ -1074,8 +1057,6 @@ double GReWeightXSecMEC::CalcWeightXSecShape(const genie::EventRecord& event)
     // plans to have either model as the default model.
 
     LOG("ReW", pWARN) << "MEC xsecshape reweighting for other CCMEC models but SuSAv2 or Valencia model not implemented";
-    std::cout << "Input (default) CCMEC cross section model: Other, i.e. " << cc_def_alg_name << std::endl;
-    std::cout << "MEC xsecshape reweighting for other CCMEC models but SuSAv2, Valencia or Martini-Ericson-Chanfray-Marteau model not implemented" << std::endl;
   }
 
   //LOG("RwMEC", pERROR) << "diff_xsec_alt = " << diff_xsec_alt << ", tot_xsec_alt = " << tot_xsec_alt;
@@ -1221,8 +1202,6 @@ double GReWeightXSecMEC::CalcWeightXSecShape_Empirical(const genie::EventRecord&
   //LOG("RwMEC", pERROR) << "NIEVES: W = " << W << ", Q2 = " << Q2;
   //if ( rW.min <= W && rW.max >= W && rQ2.min <= Q2 && rQ2.max >= Q2 ) {
 
-  std::cout << "Input (default) CCMEC cross section model: " << cc_def_alg_name << std::endl;
-  std::cout << "Alternative CCMEC cross section model: " << cc_alt3_alg_name << std::endl; 
 
   // Once the CCMEC Martini model is available, just change fXSecAlgCCAlt3 
   // (reweight from SuSAv2 or Valencia to the Empirical model) to 
@@ -1232,7 +1211,7 @@ double GReWeightXSecMEC::CalcWeightXSecShape_Empirical(const genie::EventRecord&
 
   //}
 
-  double tot_xsec_alt = this->GetXSecIntegral( fXSecAlgCCAlt_Empirical, interaction ); 
+  double tot_xsec_alt = this->GetXSecFromSplineOrIntegral( fXSecAlgCCAlt_Empirical, interaction );
 
   //LOG("RwMEC", pERROR) << "diff_xsec_alt = " << diff_xsec_alt << ", tot_xsec_alt = " << tot_xsec_alt;
 
@@ -1406,22 +1385,18 @@ double GReWeightXSecMEC::CalcWeightXSecShape_Martini(const genie::EventRecord& e
     // input tune, compute the differential and total cross section of GENIE's
     // Martini-Ericson-Chanfray-Marteau MEC (alternative) model
 
-    std::cout << "Input (default) CCMEC cross section model: " << cc_def_alg_name << std::endl;
-    std::cout << "Alternative CCMEC cross section model: " << cc_alt4_alg_name << std::endl;
 
     diff_xsec_alt = fXSecAlgCCAlt_Martini->XSec( interaction, kPSTlctl );
-    tot_xsec_alt = this->GetXSecIntegral( fXSecAlgCCAlt_Martini, interaction );
+    tot_xsec_alt = this->GetXSecFromSplineOrIntegral( fXSecAlgCCAlt_Martini, interaction );
   }
   else if ( cc_def_alg_name == "genie::MartiniEricsonChanfrayMarteauMECPXSec2024" ) {
     // If the Martini-Ericson-Chanfray-Marteau model is the default CCMEC cross section model from the
     // input tune, compute the differential and total cross section of GENIE's
     // Valencia MEC (alternative) model
 
-    std::cout << "Input (default) CCMEC cross section model: " << cc_def_alg_name << std::endl;
-    std::cout << "Alternative CCMEC cross section model: " << cc_alt_alg_name << std::endl;
 
     diff_xsec_alt = fXSecAlgCCAlt_Nieves->XSec( interaction, kPSTlctl );
-    tot_xsec_alt = this->GetXSecIntegral( fXSecAlgCCAlt_Nieves, interaction );
+    tot_xsec_alt = this->GetXSecFromSplineOrIntegral( fXSecAlgCCAlt_Nieves, interaction );
   }
   else {
     // If the Empirical or any other model is the default CCMEC cross section model
@@ -1429,8 +1404,6 @@ double GReWeightXSecMEC::CalcWeightXSecShape_Martini(const genie::EventRecord& e
     // plans to have any other model as the default model.
 
     LOG("ReW", pWARN) << "MEC xsecshape reweighting for other CCMEC models but Valencia, SuSAv2 or Martini model not implemented";
-    std::cout << "Input (default) CCMEC cross section model: Other, i.e. " << cc_def_alg_name << std::endl;
-    std::cout << "MEC xsecshape reweighting for other CCMEC models but SuSAv2 or Valencia model not implemented" << std::endl;
   }
 
   //LOG("RwMEC", pERROR) << "diff_xsec_alt = " << diff_xsec_alt << ", tot_xsec_alt = " << tot_xsec_alt;
