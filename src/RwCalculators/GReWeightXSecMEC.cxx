@@ -38,7 +38,9 @@
 #include "RwFramework/GSystSet.h"
 #include "RwFramework/GSystUncertainty.h"
 
+#include <algorithm>
 #include <iomanip>
+#include <limits>
 
 using namespace genie;
 using namespace genie::rew;
@@ -234,6 +236,7 @@ void GReWeightXSecMEC::Reset(void)
   fDecayAngLegendre4TwkDial = 0.;
   fDecayAngLegendre5TwkDial = 0.;
   fDecayAngLegendre6TwkDial = 0.;
+  fDecayAngLegendreKCacheValid = false;
   fCCXSecShapeTwkDial = 0.;
   fCCXSecShapeEmpiricalTwkDial = 0.;
   fCCXSecShapeMartiniTwkDial = 0.;
@@ -307,6 +310,7 @@ void GReWeightXSecMEC::Init(void) {
   fDecayAngLegendre4TwkDial = 0.;
   fDecayAngLegendre5TwkDial = 0.;
   fDecayAngLegendre6TwkDial = 0.;
+  fDecayAngLegendreKCacheValid = false;
   fFracPN_CCTwkDial = 0.;
   fFracDelta_CCTwkDial = 0.;
   fCCXSecShapeTwkDial = 0.;
@@ -662,7 +666,20 @@ double GReWeightXSecMEC::CalcWeightAngularDistLegendre(const genie::EventRecord&
 
   std::cout << "Legendre polynomial P_l( " << 1 << " , " << std::cos(theta_N1) << ") = " << gsl_sf_legendre_Pl(1, std::cos(theta_N1)) << std::endl;
 
-  double weight = CalcWeightDecayAngMECLegendre(theta_N1, twk_dial, twk_dial2, twk_dial3, twk_dial4, twk_dial5, twk_dial6);
+  // The values (twk_dial, twk_dial2, ..., twk_dial6) define one systematic
+  // throw. The amplitude k that scales them is computed once per throw
+  // (i.e., cached and only recomputed when the dial values actually
+  // change) rather than once per event.
+  double current_dials[6] = { twk_dial, twk_dial2, twk_dial3, twk_dial4, twk_dial5, twk_dial6 };
+  bool dials_changed = !fDecayAngLegendreKCacheValid ||
+    !std::equal( current_dials, current_dials + 6, fDecayAngLegendreKCachedDials );
+  if ( dials_changed ) {
+    fDecayAngLegendreK = ComputeLegendreAmplitudeK( twk_dial, twk_dial2, twk_dial3, twk_dial4, twk_dial5, twk_dial6 );
+    std::copy( current_dials, current_dials + 6, fDecayAngLegendreKCachedDials );
+    fDecayAngLegendreKCacheValid = true;
+  }
+
+  double weight = CalcWeightDecayAngMECLegendre(theta_N1, twk_dial, twk_dial2, twk_dial3, twk_dial4, twk_dial5, twk_dial6, fDecayAngLegendreK);
 
   return weight;
 }
@@ -1594,20 +1611,56 @@ double GReWeightXSecMEC::CalcWeight2p2hEnergyDependence(const genie::EventRecord
   return weight;
 }
 //_______________________________________________________________________________________
-double GReWeightXSecMEC::CalcWeightDecayAngMECLegendre(double theta_rad, double twk_dial, double twk_dial2, double twk_dial3, double twk_dial4, double twk_dial5, double twk_dial6)
+namespace {
+  // Raw, un-clamped Legendre shape F(costheta) = sum_l twk_dial_l * P_l(costheta).
+  // Shared by CalcWeightDecayAngMECLegendre() and ComputeLegendreAmplitudeK() so
+  // that the latter sees the true (unclamped) value when scanning for F_min.
+  double LegendreShape(double costheta, double twk_dial, double twk_dial2,
+    double twk_dial3, double twk_dial4, double twk_dial5, double twk_dial6)
+  {
+    std::vector<double> twk_dials = {twk_dial, twk_dial2, twk_dial3, twk_dial4, twk_dial5, twk_dial6};
+
+    double F = 0.;
+    for( size_t i = 0; i < twk_dials.size(); ++i ){
+      int l = i + 1; // l in P_l(costheta) determines the Legendre-Polynomial
+      double P_l = gsl_sf_legendre_Pl( l, costheta );
+      F += twk_dials[i] * P_l;
+    }
+    return F;
+  }
+}
+//_______________________________________________________________________________________
+double GReWeightXSecMEC::CalcWeightDecayAngMECLegendre(double theta_rad, double twk_dial, double twk_dial2, double twk_dial3, double twk_dial4, double twk_dial5, double twk_dial6, double k)
 {
   double costheta = std::cos(theta_rad);
-  double weight = 1.;
+  double F = LegendreShape(costheta, twk_dial, twk_dial2, twk_dial3, twk_dial4, twk_dial5, twk_dial6);
 
-  std::vector<double> twk_dials = {twk_dial, twk_dial2, twk_dial3, twk_dial4, twk_dial5, twk_dial6};
+  double weight = 1. + k * F;
 
-  for( size_t i = 0; i < twk_dials.size(); ++i ){
-    int l = i + 1; // l in P_l(costheta) determines the Legendre-Polynomial
-    double P_l = gsl_sf_legendre_Pl( l, costheta );
-    weight += twk_dials[i] * P_l;
+  // Hard backstop: the theta-scan in ComputeLegendreAmplitudeK() should
+  // already keep this non-negative over [0, pi], but clamp here in case
+  // the scan's finite resolution missed the true minimum of F(theta)
+  return std::max( 0., weight );
+}
+//_______________________________________________________________________________________
+double GReWeightXSecMEC::ComputeLegendreAmplitudeK(double twk_dial, double twk_dial2, double twk_dial3, double twk_dial4, double twk_dial5, double twk_dial6)
+{
+  // Scan theta over the full angular domain [0, pi] to find the minimum of
+  // the raw, un-clamped Legendre shape F(theta).
+  const int n_steps = 10000;
+  double F_min = std::numeric_limits<double>::max();
+  for ( int i = 0; i <= n_steps; ++i ) {
+    double theta = constants::kPi * static_cast<double>(i) / n_steps;
+    double costheta = std::cos(theta);
+    double F = LegendreShape(costheta, twk_dial, twk_dial2, twk_dial3, twk_dial4, twk_dial5, twk_dial6);
+    F_min = std::min( F_min, F );
   }
 
-  return weight;
+  // If the shape never dips below zero, positivity of w(theta) = 1 + k*F(theta)
+  // is not restrictive for any k >= 0, so just use an amplitude of 1
+  if ( F_min >= 0. ) return 1.;
+
+  return 1. / ( -F_min );
 }
 //_______________________________________________________________________________________
 double GReWeightXSecMEC::GetXSecIntegral(const XSecAlgorithmI* xsec_alg,

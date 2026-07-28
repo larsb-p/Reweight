@@ -80,8 +80,22 @@ namespace rew   {
    /// Build energy-dependence ratio graphs from all three MEC models
    void BuildEnergyDepRatioGraphs(const EventRecord& event);
 
-   /// Helper function for CalcWeightDecayAngMECLegendre
-   double CalcWeightDecayAngMECLegendre(double theta_rad, double twk_dial, double twk_dial2, double twk_dial3, double twk_dial4, double twk_dial5, double twk_dial6);
+   /// Helper function for CalcWeightAngularDistLegendre. Returns
+   /// max(0, 1 + k * F(theta)), where F(theta) = sum_l coeff_l * P_l(costheta)
+   /// is the raw Legendre-polynomial shape and k is the per-throw
+   /// amplitude scale. Since every P_l (l >= 1) integrates to zero over the
+   /// isotropic base distribution in costheta, <F(theta)> = 0 and therefore
+   /// <weight> = 1 for any k, preserving the overall normalization. The
+   /// max(0, ...) is a hard backstop against negative weights in case the
+   /// discrete theta-scan used to pick k (see ComputeLegendreAmplitudeK)
+   /// slightly underestimates the true minimum of F(theta)
+   double CalcWeightDecayAngMECLegendre(double theta_rad, double twk_dial, double twk_dial2, double twk_dial3, double twk_dial4, double twk_dial5, double twk_dial6, double k);
+
+   /// Given the per-order Legendre coefficients (twk_dial...twk_dial6) for
+   /// one systematic throw, find the largest amplitude k for which
+   /// w(theta) = 1 + k*F(theta) stays non-negative over the full angular
+   /// domain [0, pi]
+   double ComputeLegendreAmplitudeK(double twk_dial, double twk_dial2, double twk_dial3, double twk_dial4, double twk_dial5, double twk_dial6);
 
    /// Simple struct containing tweak dial information for the
    /// normalization of one MEC interaction type (CC, NC, EM)
@@ -117,6 +131,14 @@ namespace rew   {
    double fDecayAngLegendre4TwkDial;
    double fDecayAngLegendre5TwkDial;
    double fDecayAngLegendre6TwkDial;
+
+   /// Per-throw amplitude scale k applied to the DecayAngMECLegendre shape.
+   /// Cached (along with the coefficient values it was computed from) so
+   /// that it is only recomputed when the coefficients change, rather than
+   /// on every event
+   double fDecayAngLegendreK;
+   double fDecayAngLegendreKCachedDials[6];
+   bool   fDecayAngLegendreKCacheValid;
 
    /// Tweak dial value for adjusting the fraction of CC events that
    /// involve an initial pn pair
